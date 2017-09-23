@@ -1,0 +1,35 @@
+{
+	"name": "My great scraper",
+	"options": {
+		"store": {
+			"strategy": "disk"
+		},
+		"spiders": {
+			"concurrency": 3,
+			"userAgent": "fah"
+		}
+	},
+	"spiders": [
+		{
+			"urls": [
+				"http://www.example.com"
+			],
+			"test": "",
+			"links": [
+				"//a/@href"
+			]
+		}
+	],
+	"scrapers": [
+		{
+			"name": "main pages",
+			"test": "",
+			"fields": {
+				"title": "foo/bar/baz"
+			},
+			"transforms": [
+			  "./my-transform.js"
+			]
+		}
+	]
+}

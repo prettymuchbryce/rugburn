@@ -78,8 +78,11 @@ func run(rugPath string) error {
 	}
 
 	ctx := context.Background()
-	RunSpiders(ctx, rugFile)
-
 	log.Info("Starting scraper..")
+	err = RunSpiders(ctx, rugFile)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

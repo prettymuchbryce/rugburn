@@ -6,7 +6,8 @@
 		},
 		"spiders": {
 			"concurrency": 3,
-			"userAgent": "fah"
+			"userAgent": "fah",
+			"limit": 10
 		}
 	},
 	"spiders": [
@@ -16,7 +17,7 @@
 			],
 			"test": "",
 			"links": [
-				"//a/@href"
+				"//a[@href=\"http://www.iana.org/domains/example\"]/@href"
 			]
 		}
 	],

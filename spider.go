@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"net/http"
 	"net/url"
@@ -10,48 +12,73 @@ import (
 	"github.com/ChrisTrenkamp/goxpath/tree"
 	"github.com/ChrisTrenkamp/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+func init() {
+	gob.Register(&SpiderRequest{})
+	gob.Register(&SpiderResult{})
+}
+
 const strategyDisk = "disk"
+const strategyMem = "memory"
 
-type Iterator interface {
-	Next() bool
-	Error() error
+func storeResult(s Store, r *SpiderResult) error {
+	var key = "res-" + r.URL.String()
+	var buffer = bytes.NewBuffer([]byte{})
+	e := gob.NewEncoder(buffer)
+	err := e.Encode(r)
+	if err != nil {
+		return err
+	}
+	return s.Put([]byte(key), buffer.Bytes())
 }
 
-type Store interface {
-	Get(k string) (interface{}, error)
-	Put(k string, v interface{}) error
-	NewIterator(prefix string) Iterator
+func storeRequest(s Store, r *SpiderRequest) error {
+	var key = "req-" + r.URL.String()
+	var buffer = bytes.NewBuffer([]byte{})
+	e := gob.NewEncoder(buffer)
+	err := e.Encode(r)
+	if err != nil {
+		return err
+	}
+	return s.Put([]byte(key), buffer.Bytes())
 }
 
-type MemoryStore struct {
-	m map[string]interface{}
+func getNextRequest(s Store) (bool, *SpiderRequest, error) {
+	iter := s.NewIterator(util.BytesPrefix([]byte("req-")))
+	if !iter.Next() {
+		return false, nil, nil
+	}
+
+	v := iter.Value()
+
+	iter.Release()
+	err := iter.Error()
+
+	if err != nil {
+		return false, nil, err
+	}
+
+	var buffer = bytes.NewBuffer(v)
+	var r = &SpiderRequest{}
+	d := gob.NewDecoder(buffer)
+	err = d.Decode(r)
+	if err != nil {
+		return false, nil, err
+	}
+
+	return true, r, nil
 }
 
-type LevelDBStore struct {
-	db *leveldb.DB
+func hasResult(s Store, url *url.URL) (bool, error) {
+	return s.Contains([]byte("res-" + url.String()))
 }
 
-func (*LevelDBStore) Put(k string, v interface{}) error {
-	return nil
-}
-
-func (*LevelDBStore) Get(k string) (interface{}, error) {
-	return nil, nil
-}
-
-func (*LevelDBStore) NewIterator(prefix string) Iterator {
-	return nil
-}
-
-type State struct {
-	Successful   bool
-	Complete     bool
-	TotalPages   int
-	TotalSuccess int
-	TotalError   int
+type spiderManager struct {
+	inFlight int
+	conc     int
+	c        chan *SpiderResult
 }
 
 type SpiderRequest struct {
@@ -68,32 +95,35 @@ type SpiderResult struct {
 }
 
 func getStore(config *ConfigStoreOptions) (Store, error) {
+	var store Store
 	switch config.Strategy {
 	case strategyDisk:
-		store := &LevelDBStore{}
-		// XXX detect path
-		db, err := leveldb.OpenFile("./db", nil)
-		if err != nil {
-			return nil, err
-		}
-		store.db = db
-		return store, nil
+		store = &DiskStore{}
+	case strategyMem:
+		store = &MemoryStore{}
+	default:
+		return nil, errors.New("Unknown store strategy or strategy not found")
+
 	}
 
-	return nil, errors.New("Unknown store strategy or strategy not found")
+	store.Init(config)
+	return store, nil
 }
 
 func RunSpiders(ctx context.Context, rugFile *RugFile) error {
-	var conc = rugFile.Options.SpiderOptions.Concurrency
-	var c = make(chan *SpiderResult, conc)
 	store, err := getStore(rugFile.Options.StoreOptions)
 	if err != nil {
 		return err
 	}
-	var reqQueue []*SpiderRequest
-	var inFlight int
 
-	// XXX Check any unfinished in queue
+	m := &spiderManager{
+		inFlight: 0,
+		conc:     rugFile.Options.SpiderOptions.Concurrency,
+		c:        make(chan *SpiderResult, rugFile.Options.SpiderOptions.Concurrency),
+	}
+
+	log.Info("Hey")
+
 	for _, configSpider := range rugFile.Spiders {
 		for _, us := range configSpider.URLs {
 			u, err := url.Parse(us)
@@ -105,57 +135,87 @@ func RunSpiders(ctx context.Context, rugFile *RugFile) error {
 				URL:    u,
 				Config: configSpider,
 			}
-			reqQueue = append(reqQueue, req)
+			err = storeRequest(store, req)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	for i := 0; i < len(reqQueue) && i < conc; i++ {
-		inFlight++
-		var r *SpiderRequest
-		r, reqQueue = reqQueue[0], reqQueue[1:]
-		go makeRequest(r, c)
+	var done bool
+	done, err = makeRequests(store, m)
+	if err != nil {
+		return err
 	}
+	if done {
+		log.Info("..Done!")
+		return nil
+	}
+
+	log.Info("Prob waiting for stuff")
 
 	for {
 		select {
-		case r := <-c:
-			log.Println(r)
-			store.Put(r.URL.String(), r)
+		case r := <-m.c:
+			log.Info(r)
+			err = storeResult(store, r)
+			if err != nil {
+				return err
+			}
+			err = store.Delete([]byte("req-" + r.URL.String()))
+			if err != nil {
+				return err
+			}
 			for _, u := range r.Children {
 				req := &SpiderRequest{
 					URL:    u,
 					Config: r.Config,
 				}
-				reqQueue = append(reqQueue, req)
-			}
-			inFlight--
-			for len(reqQueue) > 0 && inFlight < rugFile.Options.SpiderOptions.Concurrency {
-				var r *SpiderRequest
-				r = reqQueue[0]
-				if len(reqQueue) > 1 {
-					reqQueue = reqQueue[1:]
-				} else {
-					reqQueue = []*SpiderRequest{}
-				}
-
-				log.Info("GO AGAIN", r.URL)
-
-				// Make sure we haven't visited this URL already
-				value, err := store.Get(r.URL.String())
+				err := storeRequest(store, req)
 				if err != nil {
 					return err
 				}
-				if value == nil {
-					go makeRequest(r, c)
-					inFlight++
-				}
 			}
-			if inFlight == 0 && len(reqQueue) == 0 {
-				log.Info("done")
+			m.inFlight--
+
+			var done bool
+			done, err = makeRequests(store, m)
+			if err != nil {
+				return err
+			}
+			if done {
+				log.Info("..Done!")
 				return nil
 			}
 		}
 	}
+}
+
+func makeRequests(store Store, m *spiderManager) (done bool, err error) {
+	for m.inFlight < m.conc {
+		exists, r, err := getNextRequest(store)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			break
+		}
+		visited, err := hasResult(store, r.URL)
+		if err != nil {
+			return false, err
+		}
+		if visited {
+			continue
+		}
+		go makeRequest(r, m.c)
+		m.inFlight++
+	}
+
+	if m.inFlight == 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func parseSettings(s *xmltree.ParseOptions) {
@@ -193,12 +253,10 @@ func makeRequest(req *SpiderRequest, c chan *SpiderResult) {
 		if err != nil {
 			log.Error(err)
 		}
-		log.Infof("xresult %+v", xresult)
 		for _, i := range xresult {
 			if err != nil {
 				log.Error(err)
 			}
-			log.Infof("string %s", i.ResValue())
 			if xresult != nil {
 				url, err := url.Parse(i.ResValue())
 				if err != nil {
@@ -206,7 +264,6 @@ func makeRequest(req *SpiderRequest, c chan *SpiderResult) {
 				}
 				if !url.IsAbs() {
 					url = req.URL.ResolveReference(url)
-					log.Infof("Is absolute? %s", url.String())
 				}
 				result.Children = append(result.Children, url)
 			}

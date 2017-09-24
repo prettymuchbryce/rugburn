@@ -76,20 +76,19 @@ func hasResult(s Store, url *url.URL) (bool, error) {
 }
 
 type spiderManager struct {
+	config   *ConfigSpider
 	inFlight int
 	conc     int
 	c        chan *SpiderResult
 }
 
 type SpiderRequest struct {
-	URL    *url.URL
-	Config *ConfigSpider
+	URL *url.URL
 }
 
 type SpiderResult struct {
 	URL      *url.URL
 	Error    error
-	Config   *ConfigSpider
 	Response string
 	Children []*url.URL
 }
@@ -118,27 +117,25 @@ func RunSpiders(ctx context.Context, rugFile *RugFile) error {
 
 	m := &spiderManager{
 		inFlight: 0,
+		config:   rugFile.Spider,
 		conc:     rugFile.Options.SpiderOptions.Concurrency,
 		c:        make(chan *SpiderResult, rugFile.Options.SpiderOptions.Concurrency),
 	}
 
 	log.Info("Hey")
 
-	for _, configSpider := range rugFile.Spiders {
-		for _, us := range configSpider.URLs {
-			u, err := url.Parse(us)
-			if err != nil {
-				log.Errorf("Failed to parse URL %s", us)
-				return err
-			}
-			req := &SpiderRequest{
-				URL:    u,
-				Config: configSpider,
-			}
-			err = storeRequest(store, req)
-			if err != nil {
-				return err
-			}
+	for _, us := range m.config.URLs {
+		u, err := url.Parse(us)
+		if err != nil {
+			log.Errorf("Failed to parse URL %s", us)
+			return err
+		}
+		req := &SpiderRequest{
+			URL: u,
+		}
+		err = storeRequest(store, req)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -168,8 +165,7 @@ func RunSpiders(ctx context.Context, rugFile *RugFile) error {
 			}
 			for _, u := range r.Children {
 				req := &SpiderRequest{
-					URL:    u,
-					Config: r.Config,
+					URL: u,
 				}
 				err := storeRequest(store, req)
 				if err != nil {
@@ -192,14 +188,27 @@ func RunSpiders(ctx context.Context, rugFile *RugFile) error {
 }
 
 func makeRequests(store Store, m *spiderManager) (done bool, err error) {
+	iter := store.NewIterator(util.BytesPrefix([]byte("req-")))
+	defer iter.Release()
 	for m.inFlight < m.conc {
-		exists, r, err := getNextRequest(store)
+		if !iter.Next() {
+			break
+		}
+
+		v := iter.Value()
+		err := iter.Error()
 		if err != nil {
 			return false, err
 		}
-		if !exists {
-			break
+
+		var buffer = bytes.NewBuffer(v)
+		var r = &SpiderRequest{}
+		d := gob.NewDecoder(buffer)
+		err = d.Decode(r)
+		if err != nil {
+			return false, err
 		}
+
 		visited, err := hasResult(store, r.URL)
 		if err != nil {
 			return false, err
@@ -207,7 +216,7 @@ func makeRequests(store Store, m *spiderManager) (done bool, err error) {
 		if visited {
 			continue
 		}
-		go makeRequest(r, m.c)
+		go makeRequest(m, r, m.c)
 		m.inFlight++
 	}
 
@@ -222,13 +231,14 @@ func parseSettings(s *xmltree.ParseOptions) {
 	s.Strict = false
 }
 
-func makeRequest(req *SpiderRequest, c chan *SpiderResult) {
+func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 	resp, err := http.Get(req.URL.String())
 	var result = &SpiderResult{
 		URL:      req.URL,
-		Config:   req.Config,
 		Children: []*url.URL{},
 	}
+
+	log.Infof("Making request to %s", req.URL.String())
 
 	var root tree.Node
 	if err == nil {
@@ -243,7 +253,7 @@ func makeRequest(req *SpiderRequest, c chan *SpiderResult) {
 
 	resp.Body.Close()
 
-	for _, l := range req.Config.LinksXPATH {
+	for _, l := range m.config.LinksXPATH {
 		xpExec, err := goxpath.Parse(l)
 		if err != nil {
 			log.Error(err)

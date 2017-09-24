@@ -10,17 +10,14 @@
 			"limit": 10
 		}
 	},
-	"spiders": [
-		{
-			"urls": [
-				"http://www.example.com"
-			],
-			"test": "",
-			"links": [
-				"//a[@href=\"http://www.iana.org/domains/example\"]/@href"
-			]
-		}
-	],
+	"spider": {
+		"urls": [
+			"http://www.example.com"
+		],
+		"links": [
+			"//a[@href=\"http://www.iana.org/domains/example\"]/@href"
+		]
+	},
 	"scrapers": [
 		{
 			"name": "main pages",

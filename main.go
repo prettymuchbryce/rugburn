@@ -60,7 +60,7 @@ type ConfigSpider struct {
 type RugFile struct {
 	Name     string           `json:"name"`
 	Options  *ConfigOptions   `json:"options"`
-	Spiders  []*ConfigSpider  `json:"spiders"`
+	Spider   *ConfigSpider    `json:"spider"`
 	Scrapers []*ConfigScraper `json:"scrapers"`
 }
 

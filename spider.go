@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/gob"
 	"errors"
 	"net/http"
@@ -109,12 +108,7 @@ func getStore(config *ConfigStoreOptions) (Store, error) {
 	return store, nil
 }
 
-func RunSpiders(ctx context.Context, rugFile *RugFile) error {
-	store, err := getStore(rugFile.Options.StoreOptions)
-	if err != nil {
-		return err
-	}
-
+func RunSpider(store Store, rugFile *RugFile) error {
 	m := &spiderManager{
 		inFlight: 0,
 		config:   rugFile.Spider,
@@ -140,7 +134,7 @@ func RunSpiders(ctx context.Context, rugFile *RugFile) error {
 	}
 
 	var done bool
-	done, err = makeRequests(store, m)
+	done, err := makeRequests(store, m)
 	if err != nil {
 		return err
 	}

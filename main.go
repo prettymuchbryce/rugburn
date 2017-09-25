@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -49,6 +48,10 @@ type ConfigStoreOptions struct {
 }
 
 type ConfigScraper struct {
+	Name       string                 `json:"name"`
+	Test       string                 `json:"test"`
+	Fields     map[string]interface{} `json:"fields"`
+	Transforms []string               `json:"tranforms"`
 }
 
 type ConfigSpider struct {
@@ -77,9 +80,19 @@ func run(rugPath string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	store, err := getStore(rugFile.Options.StoreOptions)
+	if err != nil {
+		return err
+	}
+
+	log.Info("Starting spider..")
+	err = RunSpider(store, rugFile)
+	if err != nil {
+		return err
+	}
+
 	log.Info("Starting scraper..")
-	err = RunSpiders(ctx, rugFile)
+	err = RunScraper(store, rugFile)
 	if err != nil {
 		return err
 	}

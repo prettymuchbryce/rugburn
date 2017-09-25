@@ -1,5 +1,6 @@
 {
 	"name": "My great scraper",
+	"output": "./output.jsonl",
 	"options": {
 		"store": {
 			"strategy": "disk"
@@ -23,10 +24,14 @@
 			"name": "main pages",
 			"test": "",
 			"fields": {
-				"title": "foo/bar/baz"
+				"title": {
+					"test": "foo/bar/baz"
+					"fields": {
+					}
+				}
 			},
 			"transforms": [
-			  "./my-transform.js"
+			  "./transforms/name.js"
 			]
 		}
 	]

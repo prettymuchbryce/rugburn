@@ -49,6 +49,7 @@ type ConfigStoreOptions struct {
 
 type ConfigScraper struct {
 	Name       string                 `json:"name"`
+	Output     string                 `json:"output"`
 	Test       string                 `json:"test"`
 	Fields     map[string]interface{} `json:"fields"`
 	Transforms []string               `json:"tranforms"`

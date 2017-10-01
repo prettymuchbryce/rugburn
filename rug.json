@@ -1,6 +1,5 @@
 {
 	"name": "My great scraper",
-	"output": "./output.jsonl",
 	"options": {
 		"store": {
 			"strategy": "disk"
@@ -22,6 +21,7 @@
 	"scrapers": [
 		{
 			"name": "main pages",
+			"output": "scraped.jsonl",
 			"test": "",
 			"fields": {
 				"box": {

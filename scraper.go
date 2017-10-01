@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"github.com/prettymuchbryce/goxpath"
 	"github.com/prettymuchbryce/goxpath/tree"
@@ -15,10 +17,45 @@ import (
 	luajson "layeh.com/gopher-json"
 )
 
+type ScrapeJob struct {
+	config     *ConfigScraper
+	transforms []string
+	output     *os.File
+}
+
 func RunScraper(store Store, rugFile *RugFile) error {
 	iter := store.NewIterator(util.BytesPrefix([]byte("res-")))
+
+	var jobs = []*ScrapeJob{}
+	for _, sc := range rugFile.Scrapers {
+		f, err := os.OpenFile(sc.Output, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+
+		var transforms = []string{}
+		for _, t := range sc.Transforms {
+			// Open transforms
+			tByte, err := ioutil.ReadFile(t)
+			if err != nil {
+				return err
+			}
+			transforms = append(transforms, string(tByte))
+		}
+
+		defer f.Close()
+
+		job := &ScrapeJob{
+			config:     sc,
+			output:     f,
+			transforms: transforms,
+		}
+
+		jobs = append(jobs, job)
+	}
+
 	for iter.Next() {
-		for _, sc := range rugFile.Scrapers {
+		for _, job := range jobs {
 			rv := iter.Value()
 			var buffer = bytes.NewBuffer(rv)
 			var r = &SpiderResult{}
@@ -35,8 +72,8 @@ func RunScraper(store Store, rugFile *RugFile) error {
 				return err
 			}
 
-			if sc.Test != "" {
-				xpTest, err := goxpath.Parse(sc.Test)
+			if job.config.Test != "" {
+				xpTest, err := goxpath.Parse(job.config.Test)
 				if err != nil {
 					return err
 				}
@@ -51,7 +88,23 @@ func RunScraper(store Store, rugFile *RugFile) error {
 				}
 			}
 
-			parseFields(sc.Fields, root)
+			result, err := parseFields(job.config.Fields, root)
+			if err != nil {
+				return err
+			}
+
+			for _, t := range job.transforms {
+				result, err = ApplyTransform(result, t)
+			}
+
+			j, err := json.Marshal(result)
+			if err != nil {
+				return err
+			}
+			if _, err = job.output.WriteString(string(j) + "\n"); err != nil {
+				return err
+			}
+
 		}
 	}
 	iter.Release()
@@ -59,11 +112,6 @@ func RunScraper(store Store, rugFile *RugFile) error {
 	if err != nil {
 		return err
 	}
-	// Iterate over all results in the store
-	// Check the test
-	// Run the scrapers over them which pass the test
-	// Run the transforms through the result
-	// Store in the output file
 	return nil
 }
 

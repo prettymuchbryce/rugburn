@@ -116,8 +116,6 @@ func RunSpider(store Store, rugFile *RugFile) error {
 		c:        make(chan *SpiderResult, rugFile.Options.SpiderOptions.Concurrency),
 	}
 
-	log.Info("Hey")
-
 	for _, us := range m.config.URLs {
 		u, err := url.Parse(us)
 		if err != nil {
@@ -142,8 +140,6 @@ func RunSpider(store Store, rugFile *RugFile) error {
 		log.Info("..Done!")
 		return nil
 	}
-
-	log.Info("Prob waiting for stuff")
 
 	for {
 		select {

@@ -24,9 +24,10 @@
 			"name": "main pages",
 			"test": "",
 			"fields": {
-				"title": {
-					"test": "foo/bar/baz"
+				"box": {
+					"context": "foo/bar/baz",
 					"fields": {
+						"title": "foo/bar/baz"
 					}
 				}
 			},

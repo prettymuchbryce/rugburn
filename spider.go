@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/ChrisTrenkamp/goxpath"
-	"github.com/ChrisTrenkamp/goxpath/tree"
-	"github.com/ChrisTrenkamp/goxpath/tree/xmltree"
+	"github.com/prettymuchbryce/goxpath"
+	"github.com/prettymuchbryce/goxpath/tree"
+	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

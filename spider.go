@@ -6,11 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/prettymuchbryce/goxpath"
 	"github.com/prettymuchbryce/goxpath/tree"
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -22,7 +25,25 @@ func init() {
 const strategyDisk = "disk"
 const strategyMem = "memory"
 
-func storeResult(s Store, r *SpiderResult) error {
+func getStoredResultCount(db *leveldb.DB) (int, error) {
+	var resCountInt = 0
+
+	resCount, err := db.Get([]byte("count-res"), nil)
+	if err != nil {
+		return 0, err
+	}
+
+	if resCount != nil {
+		resCountInt, err = strconv.Atoi(string(resCount))
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return resCountInt, nil
+}
+
+func storeResult(db *leveldb.DB, r *SpiderResult) error {
 	var key = "res-" + r.URL.String()
 	var buffer = bytes.NewBuffer([]byte{})
 	e := gob.NewEncoder(buffer)
@@ -30,10 +51,34 @@ func storeResult(s Store, r *SpiderResult) error {
 	if err != nil {
 		return err
 	}
-	return s.Put([]byte(key), buffer.Bytes())
+
+	resCountInt, err := getStoredResultCount(db)
+	if err != nil {
+		return err
+	}
+
+	transaction, err := db.OpenTransaction()
+	if err != nil {
+		return err
+	}
+
+	err = transaction.Put([]byte(key), buffer.Bytes(), nil)
+	if err != nil {
+		return err
+	}
+
+	resCountInt++
+
+	resCountString := strconv.Itoa(resCountInt)
+	err = transaction.Put([]byte("count-res"), []byte(resCountString), nil)
+	if err != nil {
+		return err
+	}
+
+	return db.Put([]byte(key), buffer.Bytes(), nil)
 }
 
-func storeRequest(s Store, r *SpiderRequest) error {
+func storeRequest(db *leveldb.DB, r *SpiderRequest) error {
 	var key = "req-" + r.URL.String()
 	var buffer = bytes.NewBuffer([]byte{})
 	e := gob.NewEncoder(buffer)
@@ -41,11 +86,11 @@ func storeRequest(s Store, r *SpiderRequest) error {
 	if err != nil {
 		return err
 	}
-	return s.Put([]byte(key), buffer.Bytes())
+	return db.Put([]byte(key), buffer.Bytes(), nil)
 }
 
-func getNextRequest(s Store) (bool, *SpiderRequest, error) {
-	iter := s.NewIterator(util.BytesPrefix([]byte("req-")))
+func getNextRequest(db *leveldb.DB) (bool, *SpiderRequest, error) {
+	iter := db.NewIterator(util.BytesPrefix([]byte("req-")), nil)
 	if !iter.Next() {
 		return false, nil, nil
 	}
@@ -70,8 +115,8 @@ func getNextRequest(s Store) (bool, *SpiderRequest, error) {
 	return true, r, nil
 }
 
-func hasResult(s Store, url *url.URL) (bool, error) {
-	return s.Contains([]byte("res-" + url.String()))
+func hasResult(db *leveldb.DB, url *url.URL) (bool, error) {
+	return db.Has([]byte("res-"+url.String()), nil)
 }
 
 type spiderManager struct {
@@ -92,23 +137,19 @@ type SpiderResult struct {
 	Children []*url.URL
 }
 
-func getStore(config *ConfigStoreOptions) (Store, error) {
-	var store Store
+func getDB(config *ConfigStoreOptions) (*leveldb.DB, error) {
 	switch config.Strategy {
 	case strategyDisk:
-		store = &DiskStore{}
+		return leveldb.OpenFile("./", nil)
 	case strategyMem:
-		store = &MemoryStore{}
+		return leveldb.Open(storage.NewMemStorage(), nil)
 	default:
 		return nil, errors.New("Unknown store strategy or strategy not found")
 
 	}
-
-	store.Init(config)
-	return store, nil
 }
 
-func RunSpider(store Store, rugFile *RugFile) error {
+func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 	m := &spiderManager{
 		inFlight: 0,
 		config:   rugFile.Spider,
@@ -125,14 +166,14 @@ func RunSpider(store Store, rugFile *RugFile) error {
 		req := &SpiderRequest{
 			URL: u,
 		}
-		err = storeRequest(store, req)
+		err = storeRequest(db, req)
 		if err != nil {
 			return err
 		}
 	}
 
 	var done bool
-	done, err := makeRequests(store, m)
+	done, err := makeRequests(db, m)
 	if err != nil {
 		return err
 	}
@@ -145,11 +186,11 @@ func RunSpider(store Store, rugFile *RugFile) error {
 		select {
 		case r := <-m.c:
 			log.Info(r)
-			err = storeResult(store, r)
+			err = storeResult(db, r)
 			if err != nil {
 				return err
 			}
-			err = store.Delete([]byte("req-" + r.URL.String()))
+			err = db.Delete([]byte("req-"+r.URL.String()), nil)
 			if err != nil {
 				return err
 			}
@@ -157,15 +198,25 @@ func RunSpider(store Store, rugFile *RugFile) error {
 				req := &SpiderRequest{
 					URL: u,
 				}
-				err := storeRequest(store, req)
+				err := storeRequest(db, req)
 				if err != nil {
 					return err
 				}
 			}
 			m.inFlight--
 
+			c, err := getStoredResultCount(db)
+			if err != nil {
+				return err
+			}
+
+			if c >= rugFile.Options.SpiderOptions.MaxResults {
+				log.Info("...Done!")
+				return nil
+			}
+
 			var done bool
-			done, err = makeRequests(store, m)
+			done, err = makeRequests(db, m)
 			if err != nil {
 				return err
 			}
@@ -177,8 +228,8 @@ func RunSpider(store Store, rugFile *RugFile) error {
 	}
 }
 
-func makeRequests(store Store, m *spiderManager) (done bool, err error) {
-	iter := store.NewIterator(util.BytesPrefix([]byte("req-")))
+func makeRequests(db *leveldb.DB, m *spiderManager) (done bool, err error) {
+	iter := db.NewIterator(util.BytesPrefix([]byte("req-")), nil)
 	defer iter.Release()
 	for m.inFlight < m.conc {
 		if !iter.Next() {
@@ -199,7 +250,7 @@ func makeRequests(store Store, m *spiderManager) (done bool, err error) {
 			return false, err
 		}
 
-		visited, err := hasResult(store, r.URL)
+		visited, err := hasResult(db, r.URL)
 		if err != nil {
 			return false, err
 		}

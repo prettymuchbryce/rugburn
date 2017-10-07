@@ -41,6 +41,7 @@ type ConfigOptions struct {
 
 type ConfigSpiderOptions struct {
 	Concurrency int `json:"concurrency"`
+	MaxResults  int `json:"max"`
 }
 
 type ConfigStoreOptions struct {
@@ -81,7 +82,7 @@ func run(rugPath string) error {
 		return err
 	}
 
-	store, err := getStore(rugFile.Options.StoreOptions)
+	store, err := getDB(rugFile.Options.StoreOptions)
 	if err != nil {
 		return err
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/prettymuchbryce/goxpath"
 	"github.com/prettymuchbryce/goxpath/tree"
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	lua "github.com/yuin/gopher-lua"
 	luajson "layeh.com/gopher-json"
@@ -23,8 +24,8 @@ type ScrapeJob struct {
 	output     *os.File
 }
 
-func RunScraper(store Store, rugFile *RugFile) error {
-	iter := store.NewIterator(util.BytesPrefix([]byte("res-")))
+func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
+	iter := db.NewIterator(util.BytesPrefix([]byte("res-")), nil)
 
 	var jobs = []*ScrapeJob{}
 	for _, sc := range rugFile.Scrapers {

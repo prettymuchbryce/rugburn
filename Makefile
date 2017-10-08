@@ -5,6 +5,9 @@ all: ${BIN}
 ${BIN}:
 	go build -o $@
 
+bindata.go:
+	go-bindata bindata
+
 run:
 	go run *.go
 

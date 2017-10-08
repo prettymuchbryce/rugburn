@@ -1,0 +1,39 @@
+{
+	"name": "My great scraper",
+	"options": {
+		"store": {
+			"strategy": "disk"
+		},
+		"spiders": {
+			"concurrency": 3,
+			"userAgent": "fah",
+			"limit": 10
+		}
+	},
+	"spider": {
+		"urls": [
+			"http://www.example.com"
+		],
+		"links": [
+			"//a[@href=\"http://www.iana.org/domains/example\"]/@href"
+		]
+	},
+	"scrapers": [
+		{
+			"name": "main pages",
+			"output": "scraped.jsonl",
+			"test": "",
+			"fields": {
+				"box": {
+					"context": "foo/bar/baz",
+					"fields": {
+						"title": "foo/bar/baz"
+					}
+				}
+			},
+			"transforms": [
+			  "./transforms/name.js"
+			]
+		}
+	]
+}

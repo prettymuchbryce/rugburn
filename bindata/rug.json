@@ -1,38 +1,32 @@
 {
-	"name": "My great scraper",
+	"name": "Hacker News Scraper",
 	"options": {
 		"store": {
 			"strategy": "disk"
 		},
 		"spiders": {
 			"concurrency": 3,
-			"userAgent": "fah",
-			"limit": 10
+			"limit": 5
 		}
 	},
 	"spider": {
 		"urls": [
-			"http://www.example.com"
+			"https://news.ycombinator.com/news"
 		],
 		"links": [
-			"//a[@href=\"http://www.iana.org/domains/example\"]/@href"
+			"//a[@class=\"morelink\"]/@href"
 		]
 	},
 	"scrapers": [
 		{
-			"name": "main pages",
-			"output": "scraped.jsonl",
-			"test": "",
+			"name": "Links",
+			"output": "links.jsonl",
+			"context": "//a[@class=\"storylink\"]",
 			"fields": {
-				"box": {
-					"context": "foo/bar/baz",
-					"fields": {
-						"title": "foo/bar/baz"
-					}
-				}
+				"title": "/text()"
 			},
 			"transforms": [
-			  "./transforms/name.js"
+			  "./transforms/UppercaseTitle.lua"
 			]
 		}
 	]

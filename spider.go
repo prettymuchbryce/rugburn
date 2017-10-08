@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -70,8 +69,6 @@ func storeResult(db *leveldb.DB, r *SpiderResult) error {
 		return err
 	}
 
-	fmt.Println("put result", key)
-
 	resCountInt++
 
 	resCountString := strconv.Itoa(resCountInt)
@@ -121,7 +118,6 @@ func getNextRequest(db *leveldb.DB) (bool, *SpiderRequest, error) {
 }
 
 func hasResult(db *leveldb.DB, url *url.URL) (bool, error) {
-	fmt.Println("Has result?", "res-"+url.String())
 	return db.Has([]byte("res-"+url.String()), nil)
 }
 
@@ -163,6 +159,16 @@ func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 		c:        make(chan *SpiderResult, rugFile.Options.SpiderOptions.Concurrency),
 	}
 
+	count, err := getStoredResultCount(db)
+	if err != nil {
+		return err
+	}
+
+	if count >= rugFile.Options.SpiderOptions.MaxResults {
+		log.Info("..Done!")
+		return nil
+	}
+
 	for _, us := range m.config.URLs {
 		u, err := url.Parse(us)
 		if err != nil {
@@ -179,7 +185,7 @@ func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 	}
 
 	var done bool
-	done, err := makeRequests(db, m)
+	done, err = makeRequests(db, m)
 	if err != nil {
 		return err
 	}

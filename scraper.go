@@ -55,8 +55,6 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 		jobs = append(jobs, job)
 	}
 
-	fmt.Println("jobs", jobs)
-
 	for iter.Next() {
 		for _, job := range jobs {
 			rv := iter.Value()
@@ -76,7 +74,6 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 			}
 
 			if job.config.Test != "" {
-				fmt.Println("Try test")
 				xpTest, err := goxpath.Parse(job.config.Test)
 				if err != nil {
 					return err
@@ -92,22 +89,53 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 				}
 			}
 
-			fmt.Println("result")
-			result, err := parseFields(job.config.Fields, root)
-			if err != nil {
-				return err
+			var results []map[string]interface{} = []map[string]interface{}{}
+
+			if job.config.Context != "" {
+				xpContext, err := goxpath.Parse(job.config.Context)
+				if err != nil {
+					return err
+				}
+
+				cresults, err := xpContext.ExecNode(root)
+				if err != nil {
+					return err
+				}
+
+				for _, r := range cresults {
+					result, err := parseFields(job.config.Fields, r)
+					if err != nil {
+						return err
+					}
+					results = append(results, result)
+				}
+			} else {
+				result, err := parseFields(job.config.Fields, root)
+				if err != nil {
+					return err
+				}
+				results = append(results, result)
+
 			}
 
 			for _, t := range job.transforms {
-				result, err = ApplyTransform(result, t)
+				for i, r := range results {
+					result, err := ApplyTransform(r, t)
+					if err != nil {
+						return err
+					}
+					results[i] = result
+				}
 			}
 
-			j, err := json.Marshal(result)
-			if err != nil {
-				return err
-			}
-			if _, err = job.output.WriteString(string(j) + "\n"); err != nil {
-				return err
+			for _, r := range results {
+				j, err := json.Marshal(r)
+				if err != nil {
+					return err
+				}
+				if _, err = job.output.WriteString(string(j) + "\n"); err != nil {
+					return err
+				}
 			}
 
 		}

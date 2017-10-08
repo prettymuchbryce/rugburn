@@ -188,7 +188,7 @@ type ConfigScraper struct {
 	Test       string                 `json:"test"`
 	Context    string                 `json:"context"`
 	Fields     map[string]interface{} `json:"fields"`
-	Transforms []string               `json:"tranforms"`
+	Transforms []string               `json:"transforms"`
 }
 
 type ConfigSpider struct {

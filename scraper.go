@@ -239,7 +239,6 @@ func parseFields(config map[string]interface{}, node tree.Node) (map[string]inte
 		default:
 			return nil, fmt.Errorf("Unexpected type for value \"%s\"", k)
 		case map[string]interface{}:
-			fmt.Println("Found map")
 			if _, ok := f["fields"]; ok {
 				fields, ok := f["fields"].(map[string]interface{})
 				if !ok {

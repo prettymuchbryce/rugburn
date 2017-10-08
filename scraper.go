@@ -12,6 +12,7 @@ import (
 	"github.com/prettymuchbryce/goxpath"
 	"github.com/prettymuchbryce/goxpath/tree"
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
+	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	lua "github.com/yuin/gopher-lua"
@@ -145,6 +146,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 	if err != nil {
 		return err
 	}
+	log.Info("..Done!")
 	return nil
 }
 

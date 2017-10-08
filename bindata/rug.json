@@ -6,7 +6,7 @@
 		},
 		"spiders": {
 			"concurrency": 3,
-			"limit": 5
+			"max": 5
 		}
 	},
 	"spider": {

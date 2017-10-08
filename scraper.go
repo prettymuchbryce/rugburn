@@ -55,6 +55,8 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 		jobs = append(jobs, job)
 	}
 
+	fmt.Println("jobs", jobs)
+
 	for iter.Next() {
 		for _, job := range jobs {
 			rv := iter.Value()
@@ -74,6 +76,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 			}
 
 			if job.config.Test != "" {
+				fmt.Println("Try test")
 				xpTest, err := goxpath.Parse(job.config.Test)
 				if err != nil {
 					return err
@@ -89,6 +92,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 				}
 			}
 
+			fmt.Println("result")
 			result, err := parseFields(job.config.Fields, root)
 			if err != nil {
 				return err
@@ -207,6 +211,7 @@ func parseFields(config map[string]interface{}, node tree.Node) (map[string]inte
 		default:
 			return nil, fmt.Errorf("Unexpected type for value \"%s\"", k)
 		case map[string]interface{}:
+			fmt.Println("Found map")
 			if _, ok := f["fields"]; ok {
 				fields, ok := f["fields"].(map[string]interface{})
 				if !ok {
@@ -253,12 +258,17 @@ func parseFields(config map[string]interface{}, node tree.Node) (map[string]inte
 			}
 
 			var sresult string
-			if len(xresult) >= 1 {
+			if len(xresult) == 1 {
 				sresult = xresult[0].ResValue()
+				result[k] = sresult
+				continue
 			}
-			// XXX validation on string or strings
-			result[k] = sresult
-			continue
+
+			var ssresult []string = []string{}
+			for _, v := range xresult {
+				ssresult = append(ssresult, v.ResValue())
+			}
+			result[k] = ssresult
 		}
 	}
 	return result, nil

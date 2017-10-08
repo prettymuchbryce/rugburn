@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
+	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -29,8 +32,8 @@ func getStoredResultCount(db *leveldb.DB) (int, error) {
 	var resCountInt = 0
 
 	resCount, err := db.Get([]byte("count-res"), nil)
-	if err != nil {
-		return 0, err
+	if err != nil && err != lerrors.ErrNotFound {
+		return 0, nil
 	}
 
 	if resCount != nil {
@@ -67,6 +70,8 @@ func storeResult(db *leveldb.DB, r *SpiderResult) error {
 		return err
 	}
 
+	fmt.Println("put result", key)
+
 	resCountInt++
 
 	resCountString := strconv.Itoa(resCountInt)
@@ -75,7 +80,7 @@ func storeResult(db *leveldb.DB, r *SpiderResult) error {
 		return err
 	}
 
-	return db.Put([]byte(key), buffer.Bytes(), nil)
+	return transaction.Commit()
 }
 
 func storeRequest(db *leveldb.DB, r *SpiderRequest) error {
@@ -116,6 +121,7 @@ func getNextRequest(db *leveldb.DB) (bool, *SpiderRequest, error) {
 }
 
 func hasResult(db *leveldb.DB, url *url.URL) (bool, error) {
+	fmt.Println("Has result?", "res-"+url.String())
 	return db.Has([]byte("res-"+url.String()), nil)
 }
 
@@ -140,7 +146,7 @@ type SpiderResult struct {
 func getDB(config *ConfigStoreOptions) (*leveldb.DB, error) {
 	switch config.Strategy {
 	case strategyDisk:
-		return leveldb.OpenFile("./", nil)
+		return leveldb.OpenFile("./db", nil)
 	case strategyMem:
 		return leveldb.Open(storage.NewMemStorage(), nil)
 	default:
@@ -185,7 +191,6 @@ func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 	for {
 		select {
 		case r := <-m.c:
-			log.Info(r)
 			err = storeResult(db, r)
 			if err != nil {
 				return err
@@ -255,6 +260,7 @@ func makeRequests(db *leveldb.DB, m *spiderManager) (done bool, err error) {
 			return false, err
 		}
 		if visited {
+			log.Info("Found cached page.. skipping")
 			continue
 		}
 		go makeRequest(m, r, m.c)
@@ -281,18 +287,27 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 
 	log.Infof("Making request to %s", req.URL.String())
 
-	var root tree.Node
-	if err == nil {
-		root, err = xmltree.ParseXML(resp.Body, parseSettings)
-	}
-
 	if err != nil {
 		result.Error = err
 		c <- result
 		return
 	}
 
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
 	resp.Body.Close()
+
+	var root tree.Node
+	if err == nil {
+		buf := bytes.NewBuffer(body)
+		root, err = xmltree.ParseXML(buf, parseSettings)
+	}
+
+	result.Response = string(body)
 
 	for _, l := range m.config.LinksXPATH {
 		xpExec, err := goxpath.Parse(l)

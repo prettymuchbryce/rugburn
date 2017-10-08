@@ -15,8 +15,6 @@ func main() {
 	app := cli.NewApp()
 	curDir := filepath.Dir(os.Args[0])
 
-	// data, err := Asset("pub/style/foo.css")
-
 	var flagRunScrapers bool
 	var flagRunSpider bool
 	var flagRugPath string
@@ -42,7 +40,7 @@ func main() {
 					fmt.Println("A rugburn project already exists in this directory")
 					os.Exit(1)
 				}
-				err := os.Mkdir("./transforms", os.ModeDir)
+				err := os.Mkdir("transforms", 0700)
 				if err != nil {
 					return err
 				}
@@ -52,7 +50,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				d, err := Asset("rug.json")
+				d, err := Asset("bindata/rug.json")
 				if err != nil {
 					return err
 				}
@@ -66,11 +64,11 @@ func main() {
 				}
 
 				// Create example transform
-				f, err = os.Create("./transforms/UppercaseTitle.lua")
+				f, err = os.Create("transforms/UppercaseTitle.lua")
 				if err != nil {
 					return err
 				}
-				d, err = Asset("UppercaseTitle.lua")
+				d, err = Asset("bindata/UppercaseTitle.lua")
 				if err != nil {
 					return err
 				}
@@ -153,7 +151,7 @@ func main() {
 					fmt.Println("Can't find a rugburn project in this directory")
 					os.Exit(1)
 				}
-				err := os.Remove("./db")
+				err := os.RemoveAll("./db")
 				if err != nil {
 					return err
 				}
@@ -164,11 +162,10 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
-		cli.ShowAppHelpAndExit(c, 0)
 		return nil
 	}
 
-	app.Run(os.Args)
+	app.RunAndExitOnError()
 }
 
 type ConfigOptions struct {
@@ -189,6 +186,7 @@ type ConfigScraper struct {
 	Name       string                 `json:"name"`
 	Output     string                 `json:"output"`
 	Test       string                 `json:"test"`
+	Context    string                 `json:"context"`
 	Fields     map[string]interface{} `json:"fields"`
 	Transforms []string               `json:"tranforms"`
 }

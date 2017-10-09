@@ -130,6 +130,9 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 			}
 
 			for _, r := range results {
+				if len(r) == 0 {
+					continue
+				}
 				j, err := json.Marshal(r)
 				if err != nil {
 					return err

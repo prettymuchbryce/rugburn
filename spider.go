@@ -3,152 +3,23 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/prettymuchbryce/goxpath"
 	"github.com/prettymuchbryce/goxpath/tree"
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
-	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
-func init() {
-	gob.Register(&SpiderRequest{})
-	gob.Register(&SpiderResult{})
-}
-
-const strategyDisk = "disk"
-const strategyMem = "memory"
-
-func getStoredResultCount(db *leveldb.DB) (int, error) {
-	var resCountInt = 0
-
-	resCount, err := db.Get([]byte("count-res"), nil)
-	if err != nil && err != lerrors.ErrNotFound {
-		return 0, nil
-	}
-
-	if resCount != nil {
-		resCountInt, err = strconv.Atoi(string(resCount))
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return resCountInt, nil
-}
-
-func storeResult(db *leveldb.DB, r *SpiderResult) error {
-	var key = "res-" + r.URL.String()
-	var buffer = bytes.NewBuffer([]byte{})
-	e := gob.NewEncoder(buffer)
-	err := e.Encode(r)
-	if err != nil {
-		return err
-	}
-
-	resCountInt, err := getStoredResultCount(db)
-	if err != nil {
-		return err
-	}
-
-	transaction, err := db.OpenTransaction()
-	if err != nil {
-		return err
-	}
-
-	err = transaction.Put([]byte(key), buffer.Bytes(), nil)
-	if err != nil {
-		return err
-	}
-
-	resCountInt++
-
-	resCountString := strconv.Itoa(resCountInt)
-	err = transaction.Put([]byte("count-res"), []byte(resCountString), nil)
-	if err != nil {
-		return err
-	}
-
-	return transaction.Commit()
-}
-
-func storeRequest(db *leveldb.DB, r *SpiderRequest) error {
-	var key = "req-" + r.URL.String()
-	var buffer = bytes.NewBuffer([]byte{})
-	e := gob.NewEncoder(buffer)
-	err := e.Encode(r)
-	if err != nil {
-		return err
-	}
-	return db.Put([]byte(key), buffer.Bytes(), nil)
-}
-
-func getNextRequest(db *leveldb.DB) (bool, *SpiderRequest, error) {
-	iter := db.NewIterator(util.BytesPrefix([]byte("req-")), nil)
-	if !iter.Next() {
-		return false, nil, nil
-	}
-
-	v := iter.Value()
-
-	iter.Release()
-	err := iter.Error()
-
-	if err != nil {
-		return false, nil, err
-	}
-
-	var buffer = bytes.NewBuffer(v)
-	var r = &SpiderRequest{}
-	d := gob.NewDecoder(buffer)
-	err = d.Decode(r)
-	if err != nil {
-		return false, nil, err
-	}
-
-	return true, r, nil
-}
-
-func hasResult(db *leveldb.DB, url *url.URL) (bool, error) {
-	return db.Has([]byte("res-"+url.String()), nil)
-}
 
 type spiderManager struct {
 	config   *ConfigSpider
 	inFlight int
 	conc     int
 	c        chan *SpiderResult
-}
-
-type SpiderRequest struct {
-	URL *url.URL
-}
-
-type SpiderResult struct {
-	URL      *url.URL
-	Error    error
-	Response string
-	Children []*url.URL
-}
-
-func getDB(config *ConfigStoreOptions) (*leveldb.DB, error) {
-	switch config.Strategy {
-	case strategyDisk:
-		return leveldb.OpenFile("./db", nil)
-	case strategyMem:
-		return leveldb.Open(storage.NewMemStorage(), nil)
-	default:
-		return nil, errors.New("Unknown store strategy or strategy not found")
-
-	}
 }
 
 func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
@@ -280,10 +151,6 @@ func makeRequests(db *leveldb.DB, m *spiderManager) (done bool, err error) {
 	return false, nil
 }
 
-func parseSettings(s *xmltree.ParseOptions) {
-	s.Strict = false
-}
-
 func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 	resp, err := http.Get(req.URL.String())
 	var result = &SpiderResult{
@@ -291,17 +158,25 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 		Children: []*url.URL{},
 	}
 
-	log.Infof("Making request to %s", req.URL.String())
+	log.Debugf("Making request to %s", req.URL.String())
 
 	if err != nil {
-		result.Error = err
+		result.Error = err.Error()
+		log.Errorf("%s %s", req.URL, err)
+		c <- result
+		return
+	}
+
+	if resp.StatusCode >= 400 {
+		result.Error = http.StatusText(resp.StatusCode)
+		log.Errorf("%s %s", req.URL, result.Error)
 		c <- result
 		return
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("%s %s", req.URL, err)
 		return
 	}
 
@@ -311,6 +186,12 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 	if err == nil {
 		buf := bytes.NewBuffer(body)
 		root, err = xmltree.ParseXML(buf, parseSettings)
+		if err != nil {
+			log.Errorf("%s %s", req.URL, err)
+			result.Error = err.Error()
+			c <- result
+			return
+		}
 	}
 
 	result.Response = string(body)
@@ -318,21 +199,23 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 	for _, l := range m.config.LinksXPATH {
 		xpExec, err := goxpath.Parse(l)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("%s %s %s", req.URL, err, l)
 			log.Errorf("%s is not a valid XPath expression", l)
+			continue
 		}
 		xresult, err := xpExec.ExecNode(root)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("%s %s %s", req.URL, err, l)
+			continue
 		}
 		for _, i := range xresult {
 			if err != nil {
-				log.Error(err)
+				log.Errorf("%s %s", req.URL, err)
 			}
 			if xresult != nil {
 				url, err := url.Parse(i.ResValue())
 				if err != nil {
-					log.Error(err)
+					log.Errorf("%s %s", req.URL, err)
 				}
 				if !url.IsAbs() {
 					url = req.URL.ResolveReference(url)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -15,6 +16,7 @@ func main() {
 	app := cli.NewApp()
 	curDir := filepath.Dir(os.Args[0])
 
+	var flagVerbose bool
 	var flagRunScrapers bool
 	var flagRunSpider bool
 	var flagRugPath string
@@ -26,6 +28,15 @@ func main() {
 			Usage:       "The path to the rug.json",
 			Destination: &flagRugPath,
 		},
+		cli.BoolFlag{
+			Name:        "verbose",
+			Usage:       "Enable verbose output",
+			Destination: &flagVerbose,
+		},
+	}
+
+	if flagVerbose {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	app.Name = "rugburn"
@@ -235,4 +246,8 @@ func run(rugPath string) error {
 	}
 
 	return nil
+}
+
+func parseSettings(s *xmltree.ParseOptions) {
+	s.Strict = false
 }

@@ -130,32 +130,6 @@ func storeRequest(db *leveldb.DB, r *SpiderRequest) error {
 	return db.Put([]byte(key), buffer.Bytes(), nil)
 }
 
-func getNextRequest(db *leveldb.DB) (bool, *SpiderRequest, error) {
-	iter := db.NewIterator(util.BytesPrefix([]byte("req-")), nil)
-	if !iter.Next() {
-		return false, nil, nil
-	}
-
-	v := iter.Value()
-
-	iter.Release()
-	err := iter.Error()
-
-	if err != nil {
-		return false, nil, err
-	}
-
-	var buffer = bytes.NewBuffer(v)
-	var r = &SpiderRequest{}
-	d := gob.NewDecoder(buffer)
-	err = d.Decode(r)
-	if err != nil {
-		return false, nil, err
-	}
-
-	return true, r, nil
-}
-
 func hasResult(db *leveldb.DB, url *url.URL) (bool, error) {
 	return db.Has([]byte("res-"+url.String()), nil)
 }

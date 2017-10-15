@@ -3,13 +3,78 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/prettymuchbryce/goxpath/tree"
 	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	"github.com/stretchr/testify/assert"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
+
+func TestScraper(t *testing.T) {
+	testDB, err := leveldb.Open(storage.NewMemStorage(), nil)
+	if err != nil {
+		panic(err)
+	}
+
+	var page = `
+	<html>
+		<body>
+			<div class="container">
+				<span class="title">title1</span>
+			</div>
+			<div class="container">
+				<span class="title">title2</span>
+			</div>
+		</body>
+	</html>
+	`
+
+	u, _ := url.Parse("foo.com")
+
+	res := &SpiderResult{
+		URL:      u,
+		Response: page,
+	}
+
+	storeResult(testDB, res)
+
+	rugFile := &RugFile{
+		Name: "Test",
+		Options: &ConfigOptions{
+			StoreOptions: &ConfigStoreOptions{
+				Strategy: "memory",
+			},
+		},
+		Scrapers: []*ConfigScraper{
+			&ConfigScraper{
+				Name:    "Test",
+				Output:  "test.jsonl",
+				Context: "//div",
+				Fields: map[string]interface{}{
+					"title": "//span/text()",
+				},
+			},
+		},
+	}
+
+	err = RunScraper(testDB, rugFile)
+	assert.NoError(t, err)
+
+	b, _ := ioutil.ReadFile("test.jsonl")
+	assert.Equal(t, string(b), "{\"title\":\"title1\"}\n{\"title\":\"title2\"}\n")
+
+	err = os.Remove("test.jsonl")
+	if err != nil {
+		panic(err)
+	}
+
+}
 
 func TestLuaJSON(t *testing.T) {
 	var value = make(map[string]interface{})

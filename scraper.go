@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -192,48 +191,6 @@ func ApplyTransform(result map[string]interface{}, transform string) (map[string
 	}
 
 	return vmResult, nil
-}
-
-func runParser(test string, config map[string]interface{}, document string) (map[string]interface{}, error) {
-	var root tree.Node
-	var buffer = bytes.NewBuffer([]byte(document))
-	root, err := xmltree.ParseXML(buffer, parseSettings)
-	if err != nil {
-		return nil, err
-	}
-
-	xpHtml, err := goxpath.Parse("//html")
-	if err != nil {
-		return nil, err
-	}
-
-	html, err := xpHtml.ExecNode(root)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(html) == 0 {
-		return nil, errors.New("Document not found") // TODO this error is bad
-	}
-
-	if test != "" {
-		xpTest, err := goxpath.Parse(test)
-		if err != nil {
-			return nil, err
-		}
-
-		xresults, err := xpTest.ExecNode(html[0])
-		if err != nil {
-			return nil, err
-		}
-
-		if len(xresults) == 0 {
-			return nil, nil
-		}
-	}
-
-	return parseFields(config, html[0])
-
 }
 
 func parseFields(config map[string]interface{}, node tree.Node) (map[string]interface{}, error) {

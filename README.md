@@ -1,4 +1,8 @@
 # rugburn
+[![GoDoc](https://godoc.org/github.com/prettymuchbryce/rugburn?status.svg)](https://godoc.org/github.com/prettymuchbryce/rugburn)
+[![Go Report Card](https://goreportcard.com/badge/github.com/prettymuchbryce/rugburn)](https://goreportcard.com/report/github.com/prettymuchbryce/rugburn)
+[![Build Status](https://travis-ci.org/prettymuchbryce/rugburn.svg?branch=master)](https://travis-ci.org/prettymuchbryce/rugburn)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/prettymuchbryce/rugburn/master/LICENSE)
 
 > A performant configuration-based caching web scraper
 
@@ -19,9 +23,9 @@ Rugburn supports caching of requests and responses into a local on-disk database
 recommended in order to avoid IP bans, improve performance, and in order to preserve the backwards
 compatability of selectors.
 
-Caching also means you can check your scrapers and your database into github like any other
-software project. It means your configuration and transforms will remain deterministic and the
-history of them will be retained.
+Caching also means you can check your configuration alongside your database into version control.
+This means your configuration and transforms will remain deterministic and the history of them
+will be retained.
 
 Caching is optional in the case where it is not desired, or not infeasible due to a larger
 dataset.
@@ -32,7 +36,13 @@ Install locally via `go install`
 
 ## Commands
 
-TODO
+`rugburn init`
+
+`rugburn run`
+
+`rugburn clean`
+
+`rugburn help`
 
 ## Configuration options
 

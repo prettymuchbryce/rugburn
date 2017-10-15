@@ -35,10 +35,6 @@ func main() {
 		},
 	}
 
-	if flagVerbose {
-		log.SetLevel(log.DebugLevel)
-	}
-
 	app.Name = "rugburn"
 	app.Usage = "A configuration-based web scraper"
 
@@ -113,6 +109,11 @@ func main() {
 				},
 			},
 			Action: func(c *cli.Context) error {
+				if flagVerbose {
+					log.SetLevel(log.DebugLevel)
+					log.Debug("Verbose logging enabled.")
+				}
+
 				if !flagRunSpider && !flagRunScrapers {
 					flagRunSpider = true
 					flagRunScrapers = true
@@ -213,39 +214,6 @@ type RugFile struct {
 	Options  *ConfigOptions   `json:"options"`
 	Spider   *ConfigSpider    `json:"spider"`
 	Scrapers []*ConfigScraper `json:"scrapers"`
-}
-
-func run(rugPath string) error {
-	fileData, err := ioutil.ReadFile(rugPath)
-	if err != nil {
-		log.Errorf("Can't find rug.json in %s", rugPath)
-		return err
-	}
-	rugFile := &RugFile{}
-	err = json.Unmarshal(fileData, rugFile)
-	if err != nil {
-		log.Errorf("Invalid JSON in %s", rugPath)
-		return err
-	}
-
-	store, err := getDB(rugFile.Options.StoreOptions)
-	if err != nil {
-		return err
-	}
-
-	log.Info("Starting spider..")
-	err = RunSpider(store, rugFile)
-	if err != nil {
-		return err
-	}
-
-	log.Info("Starting scraper..")
-	err = RunScraper(store, rugFile)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func parseSettings(s *xmltree.ParseOptions) {

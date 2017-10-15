@@ -137,7 +137,7 @@ func makeRequests(db *leveldb.DB, m *spiderManager) (done bool, err error) {
 			return false, err
 		}
 		if visited {
-			log.Info("Found cached page.. skipping")
+			log.Debugf("Found cached page %s.. skipping", r.URL)
 			continue
 		}
 		go makeRequest(m, r, m.c)

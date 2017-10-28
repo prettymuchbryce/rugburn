@@ -61,6 +61,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 			var r = &SpiderResult{}
 			d := gob.NewDecoder(buffer)
 			err := d.Decode(r)
+
 			if err != nil {
 				return err
 			}
@@ -88,8 +89,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 				}
 			}
 
-			var results []map[string]interface{} = []map[string]interface{}{}
-
+			var results = []map[string]interface{}{}
 			if job.config.Context != "" {
 				xpContext, err := goxpath.Parse(job.config.Context)
 				if err != nil {

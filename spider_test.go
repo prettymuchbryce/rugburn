@@ -116,7 +116,7 @@ func TestRunSpiderMalformed(t *testing.T) {
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte("</div><div>"))
+		w.Write([]byte("<span>hello</span></span>"))
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler))
@@ -136,7 +136,7 @@ func TestRunSpiderMalformed(t *testing.T) {
 		},
 		Spider: &ConfigSpider{
 			URLs:       []string{url},
-			LinksXPATH: []string{"//a/@href"},
+			LinksXPATH: []string{"//span/text()"},
 		},
 	}
 
@@ -145,5 +145,5 @@ func TestRunSpiderMalformed(t *testing.T) {
 
 	r, err := getStoredResult(testDB, url)
 	assert.NoError(t, err)
-	assert.Equal(t, "XML syntax error on line 1: unexpected end element </div>", r.Error)
+	assert.Equal(t, r.Response, "<html><head></head><body><span>hello</span></body></html>")
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -13,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"golang.org/x/net/html"
 )
 
 type spiderManager struct {
@@ -23,6 +23,8 @@ type spiderManager struct {
 }
 
 func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
+	var maxResults = rugFile.Options.SpiderOptions.MaxResults
+
 	m := &spiderManager{
 		inFlight: 0,
 		config:   rugFile.Spider,
@@ -35,7 +37,7 @@ func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 		return err
 	}
 
-	if count >= rugFile.Options.SpiderOptions.MaxResults {
+	if maxResults != 0 && count >= maxResults {
 		log.Info("..Done!")
 		return nil
 	}
@@ -92,7 +94,7 @@ func RunSpider(db *leveldb.DB, rugFile *RugFile) error {
 				return err
 			}
 
-			if c >= rugFile.Options.SpiderOptions.MaxResults {
+			if maxResults > 0 && c >= maxResults {
 				log.Info("...Done!")
 				return nil
 			}
@@ -174,18 +176,30 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := html.Parse(resp.Body)
 	if err != nil {
+		result.Error = err.Error()
 		log.Errorf("%s %s", req.URL, err)
+		c <- result
 		return
 	}
 
 	resp.Body.Close()
+	var buffer *bytes.Buffer = bytes.NewBuffer([]byte{})
+
+	err = html.Render(buffer, body)
+	if err != nil {
+		result.Error = err.Error()
+		log.Errorf("%s %s", req.URL, err)
+		c <- result
+		return
+	}
+
+	result.Response = string(buffer.Bytes())
 
 	var root tree.Node
 	if err == nil {
-		buf := bytes.NewBuffer(body)
-		root, err = xmltree.ParseXML(buf, parseSettings)
+		root, err = xmltree.ParseXML(buffer, parseSettings)
 		if err != nil {
 			log.Errorf("%s %s", req.URL, err)
 			result.Error = err.Error()
@@ -194,9 +208,8 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 		}
 	}
 
-	result.Response = string(body)
-
 	for _, l := range m.config.LinksXPATH {
+		log.Debugf("Trying XPath link %s", l)
 		xpExec, err := goxpath.Parse(l)
 		if err != nil {
 			log.Errorf("%s %s %s", req.URL, err, l)
@@ -208,6 +221,7 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 			log.Errorf("%s %s %s", req.URL, err, l)
 			continue
 		}
+		log.Debugf("..found %s results", len(xresult))
 		for _, i := range xresult {
 			if err != nil {
 				log.Errorf("%s %s", req.URL, err)

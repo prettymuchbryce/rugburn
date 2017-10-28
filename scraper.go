@@ -8,9 +8,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/prettymuchbryce/goxpath"
-	"github.com/prettymuchbryce/goxpath/tree"
-	"github.com/prettymuchbryce/goxpath/tree/xmltree"
+	libxml2 "github.com/lestrrat/go-libxml2"
+	"github.com/lestrrat/go-libxml2/dom"
+	"github.com/lestrrat/go-libxml2/types"
+	"github.com/lestrrat/go-libxml2/xpath"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	lua "github.com/yuin/gopher-lua"
@@ -66,42 +67,41 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 				return err
 			}
 
-			var root tree.Node
-			buffer = bytes.NewBuffer([]byte(r.Response))
-			root, err = xmltree.ParseXML(buffer, parseSettings)
+			doc, err := libxml2.ParseHTMLString(r.Response)
 			if err != nil {
 				return err
 			}
 
+			ctx, err := xpath.NewContext(doc)
+			if err != nil {
+				return err
+			}
+
+			defer ctx.Free()
+
 			if job.config.Test != "" {
-				xpTest, err := goxpath.Parse(job.config.Test)
+				xpTest, err := ctx.Find(job.config.Test)
 				if err != nil {
 					return err
 				}
 
-				xresults, err := xpTest.ExecNode(root)
-				if err != nil {
-					return err
-				}
-
-				if len(xresults) == 0 {
+				if len(xpTest.NodeList()) == 0 {
 					return nil
 				}
+
+				defer xpTest.Free()
 			}
 
 			var results = []map[string]interface{}{}
 			if job.config.Context != "" {
-				xpContext, err := goxpath.Parse(job.config.Context)
+				xpContext, err := ctx.Find(job.config.Context)
 				if err != nil {
 					return err
 				}
 
-				cresults, err := xpContext.ExecNode(root)
-				if err != nil {
-					return err
-				}
+				defer xpContext.Free()
 
-				for _, r := range cresults {
+				for _, r := range xpContext.NodeList() {
 					result, err := parseFields(job.config.Fields, r)
 					if err != nil {
 						return err
@@ -109,7 +109,7 @@ func RunScraper(db *leveldb.DB, rugFile *RugFile) error {
 					results = append(results, result)
 				}
 			} else {
-				result, err := parseFields(job.config.Fields, root)
+				result, err := parseFields(job.config.Fields, doc)
 				if err != nil {
 					return err
 				}
@@ -193,7 +193,25 @@ func ApplyTransform(result map[string]interface{}, transform string) (map[string
 	return vmResult, nil
 }
 
-func parseFields(config map[string]interface{}, node tree.Node) (map[string]interface{}, error) {
+func parseFields(config map[string]interface{}, node types.Node) (map[string]interface{}, error) {
+	tDoc, err := node.OwnerDocument()
+	if err != nil {
+		return nil, err
+	}
+
+	doc := dom.CreateDocument()
+
+	doc.SetDocument(tDoc)
+
+	doc.SetDocumentElement(node)
+
+	defer doc.Free()
+	ctx, err := xpath.NewContext(node)
+	if err != nil {
+		return nil, err
+	}
+
+	defer ctx.Free()
 	var result = make(map[string]interface{})
 	for k, v := range config {
 		switch f := v.(type) {
@@ -206,23 +224,19 @@ func parseFields(config map[string]interface{}, node tree.Node) (map[string]inte
 					return nil, fmt.Errorf("Unexpected type for value \"fields\". Should be an object.")
 				}
 
-				nextNodes := tree.NodeSet{node}
+				nextNodes := types.NodeList{node}
 				if _, ok = f["context"]; ok {
 					contextString, ok := f["context"].(string)
 					if !ok {
 						return nil, fmt.Errorf("Unexpected type for value \"context\". Should be string.")
 					}
-					xpContainer, err := goxpath.Parse(contextString)
+					xresult, err := ctx.Find(contextString)
 					if err != nil {
 						return nil, err
 					}
 
-					xresult, err := xpContainer.ExecNode(node)
-					if err != nil {
-						return nil, err
-					}
-
-					nextNodes = xresult
+					defer xresult.Free()
+					nextNodes = xresult.NodeList()
 				}
 				value := []map[string]interface{}{}
 				for _, n := range nextNodes {
@@ -235,26 +249,23 @@ func parseFields(config map[string]interface{}, node tree.Node) (map[string]inte
 				result[k] = value
 			}
 		case string:
-			xpField, err := goxpath.Parse(f)
+			xresult, err := ctx.Find(f)
 			if err != nil {
 				return nil, err
 			}
 
-			xresult, err := xpField.ExecNode(node)
-			if err != nil {
-				return nil, err
-			}
+			defer xresult.Free()
 
 			var sresult string
-			if len(xresult) == 1 {
-				sresult = xresult[0].ResValue()
+			if len(xresult.NodeList()) == 1 {
+				sresult = xresult.NodeList()[0].TextContent()
 				result[k] = sresult
 				continue
 			}
 
 			var ssresult []string = []string{}
-			for _, v := range xresult {
-				ssresult = append(ssresult, v.ResValue())
+			for _, v := range xresult.NodeList() {
+				ssresult = append(ssresult, v.TextContent())
 			}
 			result[k] = ssresult
 		}

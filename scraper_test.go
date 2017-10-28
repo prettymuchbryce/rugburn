@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/url"
@@ -9,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prettymuchbryce/goxpath/tree"
-	"github.com/prettymuchbryce/goxpath/tree/xmltree"
+	libxml2 "github.com/lestrrat/go-libxml2"
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -67,7 +65,7 @@ func TestScraper(t *testing.T) {
 	assert.NoError(t, err)
 
 	b, _ := ioutil.ReadFile("test.jsonl")
-	assert.Equal(t, string(b), "{\"title\":\"title1\"}\n{\"title\":\"title2\"}\n")
+	assert.Equal(t, "{\"title\":\"title1\"}\n{\"title\":\"title2\"}\n", string(b))
 
 	err = os.Remove("test.jsonl")
 	if err != nil {
@@ -118,11 +116,11 @@ func TestParseFields(t *testing.T) {
 	var m = make(map[string]interface{})
 	err := json.Unmarshal([]byte(configFields), &m)
 	assert.NoError(t, err)
-	var root tree.Node
-	var buffer = bytes.NewBuffer([]byte(page))
-	root, _ = xmltree.ParseXML(buffer, parseSettings)
 
-	result, err := parseFields(m, root)
+	doc, err := libxml2.ParseHTMLString(page)
+	assert.NoError(t, err)
+
+	result, err := parseFields(m, doc)
 	assert.NoError(t, err)
 
 	containers, _ := result["containers"].([]map[string]interface{})

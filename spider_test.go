@@ -7,12 +7,14 @@ import (
 	"strconv"
 	"testing"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 func TestRunSpiderSunnyCase(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
 	testDB, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
 		panic(err)
@@ -20,12 +22,13 @@ func TestRunSpiderSunnyCase(t *testing.T) {
 
 	var urls []string
 	var url string
+	var baseURL string
 	var i = 0
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		queryIndex := strconv.Itoa(i)
 		w.WriteHeader(200)
-		turl := url + "?=" + queryIndex
+		turl := baseURL + "?=" + queryIndex
 		urls = append(urls, turl)
 		w.Write([]byte(fmt.Sprintf(`<div><a href="%s">test</a></div>`, turl)))
 		i++
@@ -33,6 +36,7 @@ func TestRunSpiderSunnyCase(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(handler))
 	url = ts.URL
+	baseURL = url[5:]
 	urls = append(urls, url)
 	defer ts.Close()
 
@@ -60,6 +64,9 @@ func TestRunSpiderSunnyCase(t *testing.T) {
 	for i, v := range urls {
 		if i >= max {
 			break
+		}
+		if v[0:5] != "http:" {
+			v = "http:" + v
 		}
 		v, err := testDB.Get([]byte("res-"+v), nil)
 		assert.NoError(t, err)

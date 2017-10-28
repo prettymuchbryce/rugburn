@@ -6,9 +6,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/prettymuchbryce/goxpath"
-	"github.com/prettymuchbryce/goxpath/tree"
-	"github.com/prettymuchbryce/goxpath/tree/xmltree"
+	libxml2 "github.com/lestrrat/go-libxml2"
+	"github.com/lestrrat/go-libxml2/xpath"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -183,7 +182,6 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 		c <- result
 		return
 	}
-
 	resp.Body.Close()
 	var buffer *bytes.Buffer = bytes.NewBuffer([]byte{})
 
@@ -197,45 +195,44 @@ func makeRequest(m *spiderManager, req *SpiderRequest, c chan *SpiderResult) {
 
 	result.Response = string(buffer.Bytes())
 
-	var root tree.Node
-	if err == nil {
-		root, err = xmltree.ParseXML(buffer, parseSettings)
-		if err != nil {
-			log.Errorf("%s %s", req.URL, err)
-			result.Error = err.Error()
-			c <- result
-			return
-		}
+	doc, err := libxml2.ParseHTMLReader(buffer)
+	if err != nil {
+		result.Error = err.Error()
+		log.Errorf("%s %s", req.URL, err)
+		c <- result
+		return
 	}
+	defer doc.Free()
+
+	ctx, err := xpath.NewContext(doc)
+	if err != nil {
+		result.Error = err.Error()
+		log.Errorf("%s %s", req.URL, err)
+		c <- result
+		return
+	}
+
+	defer ctx.Free()
 
 	for _, l := range m.config.LinksXPATH {
 		log.Debugf("Trying XPath link %s", l)
-		xpExec, err := goxpath.Parse(l)
-		if err != nil {
-			log.Errorf("%s %s %s", req.URL, err, l)
-			log.Errorf("%s is not a valid XPath expression", l)
-			continue
-		}
-		xresult, err := xpExec.ExecNode(root)
+		xpResult, err := ctx.Find(l)
+		defer xpResult.Free()
 		if err != nil {
 			log.Errorf("%s %s %s", req.URL, err, l)
 			continue
 		}
-		log.Debugf("..found %s results", len(xresult))
-		for _, i := range xresult {
+		for _, i := range xpResult.NodeList() {
+			url, err := url.Parse(i.TextContent())
 			if err != nil {
 				log.Errorf("%s %s", req.URL, err)
+				continue
 			}
-			if xresult != nil {
-				url, err := url.Parse(i.ResValue())
-				if err != nil {
-					log.Errorf("%s %s", req.URL, err)
-				}
-				if !url.IsAbs() {
-					url = req.URL.ResolveReference(url)
-				}
-				result.Children = append(result.Children, url)
+			// Handle protocol-relative URL
+			if !url.IsAbs() {
+				url = req.URL.ResolveReference(url)
 			}
+			result.Children = append(result.Children, url)
 		}
 	}
 

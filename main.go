@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/prettymuchbryce/goxpath/tree/xmltree"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -214,8 +213,4 @@ type RugFile struct {
 	Options  *ConfigOptions   `json:"options"`
 	Spider   *ConfigSpider    `json:"spider"`
 	Scrapers []*ConfigScraper `json:"scrapers"`
-}
-
-func parseSettings(s *xmltree.ParseOptions) {
-	s.Strict = false
 }

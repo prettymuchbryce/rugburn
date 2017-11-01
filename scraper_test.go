@@ -55,7 +55,7 @@ func TestScraper(t *testing.T) {
 				Output:  "test.jsonl",
 				Context: "//div",
 				Fields: map[string]interface{}{
-					"title": "//span/text()",
+					"title": "./span/text()",
 				},
 			},
 		},
@@ -105,7 +105,7 @@ func TestParseFields(t *testing.T) {
 		"containers": {
 			"context": "//div[@class=\"container\"]",
 			"fields": {
-				"title": "//span[@class=\"title\"]/text()"
+				"title": "./span[@class=\"title\"]/text()"
 			}
 		}
 	}`

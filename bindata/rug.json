@@ -23,7 +23,7 @@
 			"output": "links.jsonl",
 			"context": "//a[@class=\"storylink\"]",
 			"fields": {
-				"title": "/text()"
+				"title": "./text()"
 			},
 			"transforms": [
 			  "./transforms/UppercaseTitle.lua"

@@ -9,7 +9,6 @@ import (
 	"os"
 
 	libxml2 "github.com/lestrrat/go-libxml2"
-	"github.com/lestrrat/go-libxml2/dom"
 	"github.com/lestrrat/go-libxml2/types"
 	"github.com/lestrrat/go-libxml2/xpath"
 	log "github.com/sirupsen/logrus"
@@ -194,18 +193,6 @@ func ApplyTransform(result map[string]interface{}, transform string) (map[string
 }
 
 func parseFields(config map[string]interface{}, node types.Node) (map[string]interface{}, error) {
-	tDoc, err := node.OwnerDocument()
-	if err != nil {
-		return nil, err
-	}
-
-	doc := dom.CreateDocument()
-
-	doc.SetDocument(tDoc)
-
-	doc.SetDocumentElement(node)
-
-	defer doc.Free()
 	ctx, err := xpath.NewContext(node)
 	if err != nil {
 		return nil, err

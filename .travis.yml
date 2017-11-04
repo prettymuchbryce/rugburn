@@ -3,9 +3,6 @@ notifications:
 
 language: go
 
-install:
-    - go get -u github.com/jteeuwen/go-bindata/...
-
 script:
   - make test
 
@@ -14,4 +11,5 @@ os:
   - osx
 
 install:
+  - go get -u github.com/jteeuwen/go-bindata/...
   - make install

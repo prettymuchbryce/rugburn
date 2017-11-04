@@ -92,7 +92,7 @@ Configuration Example:
 
 ```lua
 function transform (state)
-    -- Uppercase the title field
+	-- Uppercase the title field
 	if state["title"] ~= nil then
 		state["title"] = string.upper(state["title"])
 	end

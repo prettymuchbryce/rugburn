@@ -173,6 +173,7 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
+		cli.ShowAppHelp(c)
 		return nil
 	}
 

@@ -1,5 +1,4 @@
 # rugburn
-[![GoDoc](https://godoc.org/github.com/prettymuchbryce/rugburn?status.svg)](https://godoc.org/github.com/prettymuchbryce/rugburn)
 [![Go Report Card](https://goreportcard.com/badge/github.com/prettymuchbryce/rugburn)](https://goreportcard.com/report/github.com/prettymuchbryce/rugburn)
 [![Build Status](https://travis-ci.org/prettymuchbryce/rugburn.svg?branch=master)](https://travis-ci.org/prettymuchbryce/rugburn)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/prettymuchbryce/rugburn/master/LICENSE)

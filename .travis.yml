@@ -14,11 +14,15 @@ install:
 - govendor sync
 - govendor install
 before_deploy:
-- go build -o ./rugburn
+- mkdir ./build
+- go build -o ./build/rugburn
 deploy:
   provider: releases
   api_key:
     secure: XbFZLpRx+M4Q3AQaY+u/iTZ2CqzmgOtJ5Td2t/i/NdoAoy99qQO35LRgtrDqxQbuwaWmRZ1MUQoHxQDw0Vy0pcNtBG5+z+UIoEjwR1rc/OYpe4+J1/OLpnvqG8cOOF5b5tECZSzt6JUar5CjM/KbV/rQBxAC6jc6otp2YrORsAFVNC4CAp67F1pDitl9DdbgeEsCxPnR5AcV5aNVbDfSUJrIG3DTn9Hz08QRp27yZp9MOxYAvQQA5Piab26uBjx2eyBESVLissQT7+IY/p2DpK50yulA/55ZMmR+J09dZhQt5eRuTyEUs44yksNHstiaHuv2hEgNcGt4CQ1FM9HsFQfyhpkKRVzRk/WFW8vpKwyqg2lzvxr1BktnmZ0uwnBI9QSIXzOgLU3rBWGhhNwIX++uJo0GpYphk6qRKH2RNzNZyqQzxRl0H6HVmJwq9OpzjwzNcAdg7QHwcVVXFkkyPJEfl+UueyQBHVPmvOzGgFiOxCt5gQvO5BkPnPd+/KpeR2vJr3VkikTGWT42o6Iv7mSaRpzmSpoujafBzD3Alque7JoIcOJVowI86lz98A12AMMAHj6L2lsm1VehR65VENXF0s+Zv9xrtRhrsmFB9uSb2rqitdyCbZu8st5nT4s1UHjJesC9WUi+solMWz6vHHZ81DzxMpCwG8VzD3h6rSg=
-  file: "./rugburn"
+  file_glob: true
+  file: ./build/*
   on:
     repo: prettymuchbryce/rugburn
+    tags: true
+    condition: $TRAVIS_OS_NAME == "osx"

@@ -36,7 +36,19 @@ Rugburn is still experimental and likely to contain breaking changes going forwa
 
 ## Installation
 
-It is recommended you install rugburn from the releases page.
+Mac OS X release binaries are available on the releases page. Other platforms coming soon.
+
+Windows and Linux can still manually build and install:
+
+```
+go get github.com/prettymuchbryce/rugburn
+cd $GOPATH/src/github.com/prettymuchbryce/rugburn
+make deps
+make install
+
+# Now make sure it installed successfully
+rugburn help
+```
 
 ## CLI Commands
 

@@ -11,5 +11,6 @@ os:
   - osx
 
 install:
+  - go get -u github.com/kardianos/govendor
   - go get -u github.com/jteeuwen/go-bindata/...
   - govendor install

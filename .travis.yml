@@ -13,6 +13,7 @@ install:
 - make bindata.go
 - govendor sync
 - govendor install
+before_deploy:
 - go build -o ./rugburn
 deploy:
   provider: releases

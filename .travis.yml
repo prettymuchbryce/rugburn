@@ -11,6 +11,7 @@ os:
   - osx
 
 install:
+  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install libxml2; else brew install libxml2; fi
   - go get -u github.com/kardianos/govendor
   - go get -u github.com/jteeuwen/go-bindata/...
   - govendor install

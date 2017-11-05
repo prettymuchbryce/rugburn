@@ -10,13 +10,13 @@
 Rugburn is a web scraping framework. Unlike other web scraping frameworks which require writing
 software, rugburn attempts to be a completely configuration-based web scraper.
 
-`rugburn` is installed as a CLI tool and allows you to create and modify a "sraping" environment
+`rugburn` is installed as a CLI tool and allows you to create and modify a "scraping" environment
 using only configuration. To see an example of a scraper for the website `Hacker News`, simply run
 `rugburn init` in a new directory. To see all available options run `rugburn help`.
 
-Rugburn configuraiton files specify which pages to download (spider) and which elements to extract
-via XPath (scraper). For cases where additional custom behavior is required, rugburn supports
-transformations. Transformations are scripts written in LUA to allow for you to "transform" your 
+Rugburn configuration files specify which pages to download (spider) and which elements to extract
+via XPath (scrapers). For cases where additional custom behavior is required, rugburn supports
+transformations. Transformations are scripts written in LUA which allow "transformation" of your 
 data into a more desirable format. You can re-use transformations between scrapers.
 
 Rugburn supports caching of requests and responses into a local on-disk database. This is

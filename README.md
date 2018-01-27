@@ -8,7 +8,7 @@
 ## What is rugburn?
 
 Rugburn is a web scraping framework. Unlike other web scraping frameworks which require writing
-software, rugburn attempts to be a completely configuration-based web scraper.
+code, rugburn attempts to be a completely configuration-based web scraper.
 
 `rugburn` is installed as a CLI tool and allows you to create and modify a "scraping" environment
 using only configuration. To see an example of a scraper for the website `Hacker News`, simply run

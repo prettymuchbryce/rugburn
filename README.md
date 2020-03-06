@@ -27,7 +27,7 @@ Caching also means you can check your configuration alongside your database into
 This means your configuration and transforms will remain deterministic and the history of them
 will be retained.
 
-Caching is optional in the case where it is not desired, or not infeasible due to a larger
+Caching is optional in the case where it is not desired, or infeasible due to a larger
 dataset.
 
 ## Status
